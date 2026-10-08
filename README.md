@@ -1,54 +1,58 @@
-# Spam Mail Detector
+# SMS Spam Detector
 
-Classifies SMS/email-style messages as **spam** or **ham** (not spam) using
-text preprocessing + TF-IDF + a Naive Bayes / Logistic Regression classifier.
+Classifies SMS messages as **spam** or **ham** (not spam) using text preprocessing,
+TF-IDF features and three linear classifiers, trained on the real
+**UCI SMS Spam Collection**.
+
+![Confusion matrix](outputs/confusion_matrix.png)
 
 ## Dataset
-This sandbox has no internet access, so the real
-[SMS Spam Collection (UCI)](https://archive.ics.uci.edu/dataset/228/sms+spam+collection)
-couldn't be downloaded directly here. `make_dataset.py` instead generates
-`data/sms_dataset.csv` — 240 template-based messages (120 spam / 120 ham) that
-mirror the same real-world patterns: spam leans on urgency, prize claims,
-"free", phone numbers and links; ham is ordinary scheduling/small-talk.
+[SMS Spam Collection](https://archive.ics.uci.edu/dataset/228/sms+spam+collection)
+(Almeida & Hidalgo, UCI Machine Learning Repository, CC BY 4.0): 5,574 real
+English SMS messages labelled spam/ham, stored as `data/sms_spam.csv`.
 
-**To use the real dataset:** download `SMSSpamCollection` from the link above,
-save it as `data/sms_dataset.csv` with columns `label,message`, and skip
-`make_dataset.py`. Everything downstream works unchanged.
+After removing ~400 duplicate messages, 5,171 remain: **4,518 ham / 653 spam**.
+The classes are imbalanced (~13% spam), so accuracy alone is misleading —
+a model that always says "ham" would already score 87%. F1 on the spam class
+is the main metric here.
 
 ## Approach
-1. **Load** the labeled messages.
-2. **Preprocess** — lowercase, strip URLs and punctuation, remove a small
-   stopword list, tokenize.
-3. **Feature extraction** — TF-IDF with unigrams + bigrams (max 2000 features).
-4. **Train & compare** two classifiers:
+1. **Clean** — drop duplicates, lowercase, strip URLs and punctuation, remove stopwords.
+2. **Split** — stratified 80/20 train/test split.
+3. **Features** — TF-IDF over unigrams + bigrams (5,000 features, sublinear TF).
+4. **Train & compare** three models:
    - Multinomial Naive Bayes
-   - Logistic Regression
-5. **Evaluate** with accuracy, precision, recall, F1, and a confusion matrix
-   (`outputs/confusion_matrix.png`).
-6. **Sanity check** on four new, hand-written messages not in the training set.
+   - Logistic Regression (class-balanced)
+   - Linear SVM (class-balanced)
+5. **Evaluate** with accuracy, precision, recall, F1 and a confusion matrix.
 
 ## Results
+Test set: 1,035 messages (904 ham, 131 spam).
+
 | Model | Accuracy | Precision | Recall | F1 |
 |---|---|---|---|---|
-| Multinomial Naive Bayes | 1.00 | 1.00 | 1.00 | 1.00 |
-| Logistic Regression | 1.00 | 1.00 | 1.00 | 1.00 |
+| **Linear SVM** | **0.981** | 0.951 | **0.893** | **0.921** |
+| Logistic Regression | 0.969 | 0.861 | 0.901 | 0.881 |
+| Multinomial Naive Bayes | 0.966 | **0.990** | 0.740 | 0.847 |
 
-Scores are near-perfect because the generated dataset uses a fixed set of
-templates, so vocabulary cleanly separates the two classes — this is expected
-for template data and mainly demonstrates that the pipeline works end-to-end.
-On the real SMS Spam Collection (noisier, more varied language) expect
-accuracy in the 96–98% range instead, which is the honest number to report if
-you swap in the real dataset.
+**Takeaways**
+- **Linear SVM** gives the best balance: it catches ~89% of spam while only
+  ~5% of its spam flags are wrong.
+- **Naive Bayes** almost never marks a real message as spam (99% precision) but
+  misses a quarter of spam — a reasonable choice if false alarms are very costly.
+
+## Limitations
+The dataset is from 2011, so modern phishing styles are under-represented. For example,
+*"URGENT: verify your account now or it will be suspended today."* is classified
+as ham, because 2011-era spam is mostly about prizes, ringtones and premium-rate numbers.
+Training on newer data would be the next step.
 
 ## Run it yourself
 ```bash
 pip install -r requirements.txt
-python make_dataset.py      # builds data/sms_dataset.csv
-python spam_detector.py     # trains, evaluates, saves outputs/
+python spam_detector.py     # trains, evaluates, writes outputs/
 ```
 
 ## Skills demonstrated
-Text preprocessing, TF-IDF feature extraction, basic NLP, classification
-modeling, and evaluation with precision/recall/F1 (more informative than
-accuracy alone for spam detection, where false positives — real messages
-marked as spam — matter more than raw accuracy suggests).
+Text preprocessing, TF-IDF feature extraction, handling class imbalance,
+model comparison, and choosing metrics (precision / recall / F1) that fit the problem.

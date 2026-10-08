@@ -1,8 +1,10 @@
 """
 Spam Mail Detector
-Classifies SMS/email-style messages as spam or ham (not spam).
+Classifies SMS messages as spam or ham (not spam).
+Dataset: UCI SMS Spam Collection (5,574 real messages).
 """
 
+import os
 import re
 import string
 import pandas as pd
@@ -15,12 +17,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
 
 # ---------------------------------------------------------------
 # 1. Load data
 # ---------------------------------------------------------------
-df = pd.read_csv("data/sms_dataset.csv")
+os.makedirs("outputs", exist_ok=True)
+
+df = pd.read_csv("data/sms_spam.csv")
+df = df.drop_duplicates(subset="message")  # dataset has ~400 repeated messages
+
 print("Dataset shape:", df.shape)
 print(df["label"].value_counts(), "\n")
 
@@ -58,7 +65,7 @@ X_train_text, X_test_text, y_train, y_test = train_test_split(
     df["clean_message"], df["label_num"], test_size=0.2, random_state=42, stratify=df["label_num"]
 )
 
-vectorizer = TfidfVectorizer(max_features=2000, ngram_range=(1, 2))
+vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2), sublinear_tf=True)
 X_train = vectorizer.fit_transform(X_train_text)
 X_test = vectorizer.transform(X_test_text)
 
@@ -67,7 +74,8 @@ X_test = vectorizer.transform(X_test_text)
 # ---------------------------------------------------------------
 models = {
     "Multinomial Naive Bayes": MultinomialNB(),
-    "Logistic Regression": LogisticRegression(max_iter=500),
+    "Logistic Regression": LogisticRegression(max_iter=1000, class_weight="balanced"),
+    "Linear SVM": LinearSVC(class_weight="balanced"),
 }
 
 results = []
