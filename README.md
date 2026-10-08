@@ -4,6 +4,10 @@ Classifies SMS messages as **spam** or **ham** (not spam) using text preprocessi
 TF-IDF features and three linear classifiers, trained on the real
 **UCI SMS Spam Collection**.
 
+### 🔗 [Try the live demo](https://lakshya701.github.io/spam-detector/)
+The trained model runs entirely in your browser: type any message and see the
+prediction plus which words pushed it toward spam or not spam.
+
 ![Confusion matrix](outputs/confusion_matrix.png)
 
 ## Dataset
@@ -51,8 +55,15 @@ Training on newer data would be the next step.
 ```bash
 pip install -r requirements.txt
 python spam_detector.py     # trains, evaluates, writes outputs/
+python export_model.py      # exports the model to docs/ for the web demo
 ```
+
+## How the web demo works
+`export_model.py` saves the TF-IDF vocabulary, IDF weights and SVM coefficients to
+`docs/model.json`. `docs/classifier.js` re-implements the same preprocessing,
+TF-IDF and SVM scoring in JavaScript; on all 1,035 test messages it gives the same
+predictions as scikit-learn. The page is hosted on GitHub Pages with no backend.
 
 ## Skills demonstrated
 Text preprocessing, TF-IDF feature extraction, handling class imbalance,
-model comparison, and choosing metrics (precision / recall / F1) that fit the problem.
+model comparison, deploying a model to the browser, and choosing metrics (precision / recall / F1) that fit the problem.

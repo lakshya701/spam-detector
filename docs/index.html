@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMS Spam Detector — Live Demo</title>
+<meta name="description" content="Try a TF-IDF + Linear SVM spam classifier trained on the UCI SMS Spam Collection, running entirely in your browser.">
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --border: #e2e2e0;
+    --accent: #2f6fde; --spam: #c8372d; --spam-bg: #fdecea; --ham: #1e8a4c; --ham-bg: #e7f6ed;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --card: #1d1d20; --text: #ececee; --muted: #9a9aa2; --border: #2e2e33;
+      --accent: #6d9cf0; --spam: #f0796f; --spam-bg: #3a1f1d; --ham: #5fcf8d; --ham-bg: #17301f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 1.8rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  textarea { width: 100%; min-height: 110px; resize: vertical; padding: 12px; font: inherit;
+             color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+  .examples button { font: inherit; font-size: 0.85rem; padding: 5px 10px; cursor: pointer; color: var(--text);
+                     background: transparent; border: 1px solid var(--border); border-radius: 999px; }
+  .examples button:hover { border-color: var(--accent); color: var(--accent); }
+  #result { margin-top: 20px; display: none; }
+  .verdict { display: flex; align-items: baseline; gap: 12px; padding: 14px 16px; border-radius: 8px; }
+  .verdict.spam { background: var(--spam-bg); color: var(--spam); }
+  .verdict.ham { background: var(--ham-bg); color: var(--ham); }
+  .verdict strong { font-size: 1.4rem; }
+  .verdict span { color: var(--muted); font-size: 0.9rem; }
+  h2 { font-size: 0.95rem; margin: 20px 0 8px; color: var(--muted); font-weight: 600; }
+  .terms { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .terms li { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 10px; font-size: 0.9rem; }
+  .terms code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar { height: 8px; border-radius: 4px; }
+  .bar.spam { background: var(--spam); } .bar.ham { background: var(--ham); }
+  .empty { color: var(--muted); font-size: 0.9rem; }
+  footer { margin-top: 28px; color: var(--muted); font-size: 0.85rem; }
+  footer a { color: var(--accent); }
+  @media (max-width: 480px) { .terms li { grid-template-columns: 110px 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>SMS Spam Detector</h1>
+  <p class="sub">TF-IDF + Linear SVM trained on 5,000+ real SMS messages (98% accuracy). Runs entirely in your browser — nothing you type is sent anywhere.</p>
+
+  <div class="card">
+    <label for="msg" style="display:block;font-weight:600;margin-bottom:8px">Type or paste a message</label>
+    <textarea id="msg" placeholder="e.g. Congratulations! You've won a £1000 prize. Call 09061701461 to claim now"></textarea>
+    <div class="examples" id="examples"></div>
+
+    <div id="result">
+      <div class="verdict" id="verdict"></div>
+      <h2>Words that influenced the decision</h2>
+      <ul class="terms" id="terms"></ul>
+    </div>
+    <p class="empty" id="loading">Loading model…</p>
+  </div>
+
+  <footer>
+    Model trained in Python with scikit-learn and exported to JSON — see
+    <a href="https://github.com/lakshya701/spam-detector">the source code on GitHub</a>.
+    Built by <a href="https://github.com/lakshya701">Lakshya Agarwal</a>.
+  </footer>
+</main>
+
+<script src="classifier.js"></script>
+<script>
+  const EXAMPLES = [
+    "WINNER!! You have been selected to receive a £900 prize reward! Call 09061701461 to claim",
+    "Hey, are you free for lunch tomorrow around noon?",
+    "FREE entry into our weekly competition, text WIN to 80086 now",
+    "Ok I'll be home in 10 mins, want me to pick up anything?",
+  ];
+  const $ = (id) => document.getElementById(id);
+  let clf;
+
+  function render() {
+    const text = $("msg").value.trim();
+    if (!clf || !text) { $("result").style.display = "none"; return; }
+    const { score, isSpam, contributions } = clf.classify(text);
+    const cls = isSpam ? "spam" : "ham";
+    const strength = Math.abs(score) > 1 ? "confident" : Math.abs(score) > 0.4 ? "fairly sure" : "borderline";
+    $("verdict").className = "verdict " + cls;
+    $("verdict").innerHTML = `<strong>${isSpam ? "Spam" : "Not spam"}</strong><span>${strength} · score ${score.toFixed(2)}</span>`;
+
+    const top = contributions.slice(0, 8);
+    const max = Math.max(...top.map((c) => Math.abs(c.value)), 1e-9);
+    $("terms").innerHTML = top.length
+      ? top.map((c) => `<li><code></code><div class="bar ${c.value > 0 ? "spam" : "ham"}" style="width:${Math.max(4, Math.abs(c.value) / max * 100)}%" title="${c.value > 0 ? "pushes toward spam" : "pushes toward not spam"}"></div></li>`).join("")
+      : `<li class="empty">No known words — the model is guessing from its baseline.</li>`;
+    top.forEach((c, i) => { $("terms").children[i].querySelector("code").textContent = c.term; });
+    $("result").style.display = "block";
+  }
+
+  EXAMPLES.forEach((e) => {
+    const b = document.createElement("button");
+    b.textContent = e.length > 38 ? e.slice(0, 36) + "…" : e;
+    b.onclick = () => { $("msg").value = e; render(); };
+    $("examples").appendChild(b);
+  });
+  $("msg").addEventListener("input", render);
+
+  fetch("model.json").then((r) => r.json()).then((m) => {
+    clf = createClassifier(m);
+    $("loading").remove();
+    render();
+  }).catch(() => { $("loading").textContent = "Could not load the model."; });
+</script>
+</body>
+</html>
